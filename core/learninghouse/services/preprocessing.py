@@ -54,7 +54,8 @@ class DatasetPreprocessing:
 
         categoricals = cls.columns_intersection(categoricals, data)
 
-        used_columns = categoricals + cls.columns_intersection(numericals, data)
+        used_columns = categoricals + \
+            cls.columns_intersection(numericals, data)
 
         if len(categoricals) > 0:
             x_temp = pd.get_dummies(data[used_columns], columns=categoricals)
@@ -99,7 +100,8 @@ class DatasetPreprocessing:
         )
 
         if only_features:
-            numericals = cls.columns_intersection(numericals, brain.dataset.features)
+            numericals = cls.columns_intersection(
+                numericals, brain.dataset.features)
         else:
             numericals = cls.columns_intersection(numericals, data)
 
@@ -121,7 +123,8 @@ class DatasetPreprocessing:
             brain, data, True
         )
 
-        numericals = cls.columns_intersection(brain.dataset.columns, numericals)
+        numericals = cls.columns_intersection(
+            brain.dataset.columns, numericals)
 
         missing_columns = set.difference(
             cls.set_of_columns(numericals), cls.set_of_columns(x_vector)
@@ -130,7 +133,8 @@ class DatasetPreprocessing:
         for missing_column in missing_columns:
             x_vector.insert(0, missing_column, [np.nan])
 
-        x_vector = x_vector.reindex(columns=brain.dataset.columns, fill_value=0)
+        x_vector = x_vector.reindex(
+            columns=brain.dataset.columns, fill_value=0)
         x_vector = cls.sort_columns(x_vector)
 
         x_vector = cls.transform_columns(

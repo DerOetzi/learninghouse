@@ -1,7 +1,12 @@
 from enum import Enum
 from typing import Any, Optional
+from uuid import uuid4
 
-from pydantic import BaseModel, model_serializer, RootModel
+from pydantic import BaseModel, Field, RootModel, model_serializer
+
+
+def uuid_field(**kwargs) -> Field:
+    return Field(default_factory=lambda: str(uuid4()), **kwargs)
 
 
 class EnumModel(Enum):

@@ -4,7 +4,7 @@ class Connector {
     name: str
 }
 
-class Resource {
+interface Resource {
     uuid: str
     connector: Connector
     capabilities: List[Capability]
@@ -33,7 +33,6 @@ ActuatorCapability --|> Capability
 
 interface CapabilityValue {
     raw: Any
-    formatted: str
     typed: CapabilityType
 }
 
@@ -47,32 +46,65 @@ enum CapabilityValueType {
 CapabilityValue "1" *--> CapabilityValueType
 
 class GenericStringValue {
-    raw: str
+    raw: str | None
     typed: CapabilityValueType.CATEGORICAL
 }
 
 GenericStringValue ..|> CapabilityValue : implements
 
 class GenericNumberValue {
-    raw: float
+    raw: float | None
+    unit_of_measurement: Unit
+    typed: 
 }
+
+enum Unit {
+    AMPERE
+    CANDELA
+    CELSIUS
+    COULOMB
+    FARAD
+    GRAM
+    HERTZ
+    JOULE
+    KELVIN
+    LUMEN
+    LUX
+    METER
+    MOLE
+    NEWTON
+    OHM
+    PASCAL
+    RADIAN
+    SECOND
+    SIEMENS
+    STERADIAN
+    TESLA
+    VOLT
+    WATT
+    WEBER
+}
+
+GenericNumberValue "1" *--> Unit
 
 GenericNumberValue ..|> CapabilityValue : implements
 
 class TemperatureValue {
     typed: CapabilityValueType.NUMERICAL
+    unit_of_measurement: Unit.CELSIUS | Unit.KELVIN
 }
 
 TemperatureValue --|> GenericNumberValue
 
 class PressureValue {
     typed: CapabilityValueType.NUMERICAL
+    unit_of_measurement: Unit.PASCAL
 }
 
 PressureValue --|> GenericNumberValue
 
 class GenericBooleanValue {
-    raw: bool
+    raw: bool | None
     typed: CapabilityValueType.CATEGORICAL
 }
 
