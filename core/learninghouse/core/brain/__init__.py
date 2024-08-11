@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from os import listdir, path, stat
 from shutil import rmtree
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import Any, Optional
 
 import pandas as pd
+from fastapi import APIRouter, Depends, status
+from pydantic import StrictBool, StrictFloat, StrictInt
 from sklearn.feature_selection import SelectFromModel
 from sklearn.metrics import accuracy_score
 
-from learninghouse.api.errors.brain import (
+from learninghouse.core.auth import auth_service_cached
+from learninghouse.core.brain.errors import (
     BrainBadRequest,
     BrainExists,
     BrainNoConfiguration,
@@ -16,37 +19,34 @@ from learninghouse.api.errors.brain import (
     BrainNotEnoughData,
     BrainNotTrained,
 )
-from learninghouse.core.logger import logger
-from learninghouse.core.settings import service_settings
-from learninghouse.models.brain import (
+from learninghouse.core.brain.models import (
     Brain,
     BrainConfiguration,
     BrainDeleteResult,
     BrainEstimatorType,
     BrainFileType,
     BrainInfo,
-    BrainInfos,
     BrainPredictionResult,
+    BrainTrainingRequest,
 )
-from learninghouse.services.preprocessing import DatasetPreprocessing
-
-if TYPE_CHECKING:
-    from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from learninghouse.core.brain.preprocessing import DatasetPreprocessing
+from learninghouse.core.logger import logger
+from learninghouse.core.settings import service_settings
 
 
 class BrainService:
-    brains: Dict[str, Dict[str, Union[int, Brain]]] = {}
+    brains: dict[str, dict[str, int | Brain]] = {}
 
     @classmethod
-    def list_all(cls) -> BrainInfos:
-        brains: Dict[str, BrainInfo] = {}
+    def list_all(cls) -> dict[str, BrainInfo]:
+        brains: dict[str, BrainInfo] = {}
         for directory in listdir(service_settings().brains_directory):
             try:
                 brains[directory] = cls.get_info(directory)
             except BrainNoConfiguration:
                 pass
 
-        return BrainInfos(**brains)
+        return brains
 
     @staticmethod
     def get_info(name: str) -> BrainInfo:
@@ -76,12 +76,11 @@ class BrainService:
         cls,
         name: str,
         dependent_value: Optional[Any] = None,
-        sensors_data: Optional[Dict[str, Any]] = None
+        sensors_data: Optional[dict[str, Any]] = None,
     ) -> BrainInfo:
-        filename = Brain.sanitize_filename(
-            name, BrainFileType.TRAINING_DATA_FILE)
+        filename = Brain.sanitize_filename(name, BrainFileType.TRAINING_DATA_FILE)
 
-        trainings_data: Optional[Dict[str, Any]] = sensors_data
+        trainings_data: Optional[dict[str, Any]] = sensors_data
 
         if sensors_data is not None:
             if dependent_value is not None:
@@ -97,8 +96,7 @@ class BrainService:
                 raise BrainNotEnoughData()
         else:
             logger.debug(trainings_data)
-            trainings_data = DatasetPreprocessing.add_time_information(
-                trainings_data)
+            trainings_data = DatasetPreprocessing.add_time_information(trainings_data)
             if path.exists(filename):
                 data_temp = pd.read_csv(filename)
                 df_new_row = pd.DataFrame([trainings_data])
@@ -151,26 +149,25 @@ class BrainService:
             else:
                 score = estimator.score(x_test, y_test)
 
-            brain.store_trained(x_train.columns.tolist(),
-                                len(data.index), score)
+            brain.store_trained(x_train.columns.tolist(), len(data.index), score)
 
             return brain.info
         except FileNotFoundError as exc:
             raise BrainNoConfiguration(name) from exc
 
     @classmethod
-    def prediction(cls, name: str, request_data: Dict[str, Any]):
+    def prediction(
+        cls, name: str, request_data: dict[str, Any]
+    ) -> BrainPredictionResult:
         try:
             brain = cls.load_brain(name)
             if not brain.actual_versions:
                 raise BrainNotActual(name, brain.versions)
 
-            request_data = DatasetPreprocessing.add_time_information(
-                request_data)
+            request_data = DatasetPreprocessing.add_time_information(request_data)
 
             data = pd.DataFrame([request_data])
-            prepared_data = DatasetPreprocessing.prepare_prediction(
-                brain, data)
+            prepared_data = DatasetPreprocessing.prepare_prediction(brain, data)
 
             prediction = brain.estimator().predict(prepared_data)
 
@@ -199,8 +196,7 @@ class BrainService:
         stamp = stat(filename).st_mtime
 
         if not (name in cls.brains and cls.brains[name]["stamp"] == stamp):
-            cls.brains[name] = {"stamp": stamp,
-                                "brain": Brain.load_trained(name)}
+            cls.brains[name] = {"stamp": stamp, "brain": Brain.load_trained(name)}
 
         return cls.brains[name]["brain"]
 
@@ -242,3 +238,140 @@ class BrainConfigurationService:
         rmtree(brainpath)
 
         return BrainDeleteResult(name=name)
+
+
+authservice = auth_service_cached()
+
+brain_router = APIRouter(prefix="/brain", tags=["brain"])
+
+router_usage = APIRouter(dependencies=[Depends(authservice.protect_user)])
+
+router_training = APIRouter(dependencies=[Depends(authservice.protect_trainer)])
+
+router_admin = APIRouter(dependencies=[Depends(authservice.protect_admin)])
+
+
+@router_usage.get(
+    "s/info",
+    summary="Retrieve information",
+    description="Retrieve all information about brains.",
+    responses={
+        200: {"description": "Information of all brains"},
+    },
+)
+async def infos_get() -> dict[str, BrainInfo]:
+    return BrainService.list_all()
+
+
+@router_usage.get(
+    "/{name}/info",
+    summary="Retrieve information",
+    description="Retrieve all information of a brain.",
+    responses={
+        200: {"description": "Information of the brain"},
+        BrainNoConfiguration.STATUS_CODE: BrainNoConfiguration.api_description(),
+    },
+)
+async def info_get(name: str) -> BrainInfo:
+    return BrainService.get_info(name)
+
+
+@router_training.post(
+    "/{name}/training",
+    summary="Train the brain again",
+    description="After version updates train the brain with existing data.",
+    responses={
+        200: {"description": "Information of the trained brain"},
+        BrainNotEnoughData.STATUS_CODE: BrainNotEnoughData.api_description(),
+        BrainNoConfiguration.STATUS_CODE: BrainNoConfiguration.api_description(),
+    },
+)
+async def training_post(name: str) -> BrainInfo:
+    return BrainService.request(name)
+
+
+@router_training.put(
+    "/{name}/training",
+    summary="Train the brain with new data",
+    description="Train the brain with additional data.",
+    responses={
+        200: {"description": "Information of the trained brain"},
+        BrainNotEnoughData.STATUS_CODE: BrainNotEnoughData.api_description(),
+        BrainNoConfiguration.STATUS_CODE: BrainNoConfiguration.api_description(),
+    },
+)
+async def training_put(name: str, request: BrainTrainingRequest) -> BrainInfo:
+    return BrainService.request(name, request.dependent_value, request.sensors_data)
+
+
+@router_usage.post(
+    "/{name}/prediction",
+    summary="Prediction",
+    description="Predict a new dataset with given brain.",
+    responses={
+        200: {"description": "Prediction result"},
+        BrainNotActual.STATUS_CODE: BrainNotActual.api_description(),
+        BrainNotTrained.STATUS_CODE: BrainNotTrained.api_description(),
+    },
+)
+async def prediction_post(
+    name: str,
+    request_data: dict[str, StrictBool | StrictInt | StrictFloat | str | None],
+) -> BrainPredictionResult:
+    return BrainService.prediction(name, request_data)
+
+
+@router_usage.get(
+    "/{name}/configuration",
+    summary="Get configuration of a brain",
+    description="Get the configuration of the specified brain",
+    responses={
+        status.HTTP_200_OK: {"description": "Configuration of the brain"},
+        BrainNoConfiguration.STATUS_CODE: BrainNoConfiguration.api_description(),
+    },
+)
+async def configuration_get(name: str) -> BrainConfiguration:
+    return BrainConfigurationService.get(name)
+
+
+@router_admin.post(
+    "/configuration",
+    summary="Create a new brain configuration",
+    description="Put the configuration of a new brain",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_201_CREATED: {"description": "The new brain was created"},
+        BrainExists.STATUS_CODE: BrainExists.api_description(),
+    },
+)
+async def configuration_post(brain: BrainConfiguration) -> BrainConfiguration:
+    return BrainConfigurationService.create(brain)
+
+
+@router_admin.put(
+    "/{name}/configuration",
+    summary="Update brain configuration",
+    description="Post the configuration to update the brain",
+    responses={
+        status.HTTP_200_OK: {"description": "The brain configuration was updated"},
+        BrainNoConfiguration.STATUS_CODE: BrainNoConfiguration.api_description(),
+    },
+)
+async def configuration_put(
+    name: str, configuration: BrainConfiguration
+) -> BrainConfiguration:
+    return BrainConfigurationService.update(name, configuration)
+
+
+@router_admin.delete(
+    "/{name}/configuration",
+    summary="Delete whole brain",
+    responses={status.HTTP_200_OK: {"description": "Returns the name of the brain"}},
+)
+async def configuration_delete(name: str) -> BrainDeleteResult:
+    return BrainConfigurationService.delete(name)
+
+
+brain_router.include_router(router_usage)
+brain_router.include_router(router_training)
+brain_router.include_router(router_admin)

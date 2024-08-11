@@ -6,21 +6,22 @@ from os import makedirs, path
 from typing import Dict, List, Optional, Type
 
 import joblib
+import numpy as np
 from pydantic import Field, StrictBool, StrictFloat, StrictInt
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import LabelEncoder
 
 from learninghouse import versions
-from learninghouse.api.errors import LearningHouseSecurityException
-from learninghouse.api.errors.brain import BrainNotTrained
+from learninghouse.core.brain.errors import BrainNotTrained
+from learninghouse.core.errors.models import LearningHouseSecurityException
+from learninghouse.core.models import LearningHouseVersions, LHBaseModel, LHEnumModel
 from learninghouse.core.settings import service_settings
-from learninghouse.models import LearningHouseVersions
-from learninghouse.models.base import DictModel, EnumModel, LHBaseModel
-from learninghouse.models.preprocessing import DatasetConfiguration
 
 settings = service_settings()
 
 
-class BrainEstimatorType(EnumModel):
+class BrainEstimatorType(LHEnumModel):
     """
     **LearningHouse Service** can predict values using an estimator. An estimator can be
     of type `classifier` which fits best for your needs if you have somekind of categorical
@@ -34,11 +35,12 @@ class BrainEstimatorType(EnumModel):
     def __init__(
         self,
         typed: str,
-        estimator_class: Type[RandomForestClassifier] | Type[RandomForestRegressor]
+        estimator_class: Type[RandomForestClassifier] | Type[RandomForestRegressor],
     ):
         self._typed: str = typed
-        self._estimator_class: Type[RandomForestClassifier] | Type[RandomForestRegressor] \
-            = estimator_class
+        self._estimator_class: (
+            Type[RandomForestClassifier] | Type[RandomForestRegressor]
+        ) = estimator_class
 
     @property
     def typed(self) -> str:
@@ -79,8 +81,7 @@ class BrainEstimatorConfiguration(LHBaseModel):
     resize this value to optimize the accuracy of your model.
     """  # pylint: disable=line-too-long
 
-    typed: BrainEstimatorType = Field(
-        None, example=BrainEstimatorType.CLASSIFIER)
+    typed: BrainEstimatorType = Field(None, example=BrainEstimatorType.CLASSIFIER)
     estimators: Optional[int] = Field(100, ge=100, le=1000)
     max_depth: Optional[int] = Field(5, ge=4, le=10)
     random_state: Optional[int] = Field(0)
@@ -130,14 +131,6 @@ class BrainConfiguration(LHBaseModel):
         self.write_to_file(filename, indent=4)
 
 
-class BrainConfigurations(DictModel):
-    """
-    A dictionary of all available brain configurations.
-    """
-
-    root: Dict[str, BrainConfiguration]
-
-
 class BrainInfo(LHBaseModel):
     """
     Information of the brain about configuration, training data size, score,
@@ -148,8 +141,7 @@ class BrainInfo(LHBaseModel):
     configuration: BrainConfiguration = Field(None)
     features: Optional[List[str]] = Field(
         None,
-        example=["azimuth", "elevation", "rain_gauge",
-                 "pressure_trend_1h_falling"],
+        example=["azimuth", "elevation", "rain_gauge", "pressure_trend_1h_falling"],
     )
     training_data_size: int = Field(None, example=1234)
     score: float = Field(None, example=0.85)
@@ -160,13 +152,7 @@ class BrainInfo(LHBaseModel):
     actual_versions: bool = Field(True)
 
 
-class BrainInfos(DictModel):
-    """A dictionary of all available brains."""
-
-    root: Dict[str, BrainInfo]
-
-
-class BrainFileType(EnumModel):
+class BrainFileType(LHEnumModel):
     """
     Enumeration which holds the filetypes which are used for a brain
     """
@@ -194,15 +180,11 @@ class BrainFileType(EnumModel):
 class Brain:
     def __init__(self, name: str):
         self.name: str = name
-        self.configuration: BrainConfiguration = BrainConfiguration.from_json_file(
-            name)
+        self.configuration: BrainConfiguration = BrainConfiguration.from_json_file(name)
 
-        self.dataset: DatasetConfiguration = DatasetConfiguration(
-            self.configuration)
+        self.dataset: DatasetConfiguration = DatasetConfiguration(self.configuration)
 
-        self._estimator: Optional[
-            RandomForestClassifier | RandomForestRegressor
-        ] = None
+        self._estimator: Optional[RandomForestClassifier | RandomForestRegressor] = None
 
         self.score: Optional[float] = 0.0
 
@@ -245,8 +227,7 @@ class Brain:
             if not cls.is_trained(name):
                 raise BrainNotTrained(name)
 
-            filename = Brain.sanitize_filename(
-                name, BrainFileType.TRAINED_FILE)
+            filename = Brain.sanitize_filename(name, BrainFileType.TRAINED_FILE)
 
             loaded_brain = joblib.load(filename)
 
@@ -267,8 +248,7 @@ class Brain:
         self.score = score
         self.trained_at = datetime.now()
 
-        filename = Brain.sanitize_filename(
-            self.name, BrainFileType.TRAINED_FILE)
+        filename = Brain.sanitize_filename(self.name, BrainFileType.TRAINED_FILE)
 
         joblib.dump(self, filename)
 
@@ -314,29 +294,8 @@ class BrainTrainingRequest(LHBaseModel):
     for this `feature` will be assumed.
     """
 
-    dependent_value: StrictBool | StrictInt | StrictFloat = Field(
-        None, example=True)
-    sensors_data: Dict[str, StrictBool | StrictInt | StrictFloat | str | None] = \
-        Field(None,
-              example={
-                  "azimuth": 321.4441223144531,
-                  "elevation": -19.691608428955078,
-                  "rain_gauge": 0.0,
-                  "pressure": 971.0,
-                  "pressure_trend_1h": "falling",
-                  "temperature_outside": 23.0,
-                  "temperature_trend_1h": "rising",
-                  "light_state": False
-              },
-              )
-
-
-class BrainPredictionRequest(DictModel):
-    """
-    For prediction send a POST request to the service.
-    """
-
-    root: Dict[str, StrictBool | StrictInt | StrictFloat | str | None] = Field(
+    dependent_value: StrictBool | StrictInt | StrictFloat = Field(None, example=True)
+    sensors_data: Dict[str, StrictBool | StrictInt | StrictFloat | str | None] = Field(
         None,
         example={
             "azimuth": 321.4441223144531,
@@ -356,7 +315,7 @@ class BrainPredictionResult(LHBaseModel):
     The result of a prediction request."""
 
     brain: BrainInfo
-    preprocessed: Dict[str, StrictBool | StrictInt | StrictFloat | str] = Field(
+    preprocessed: dict[str, StrictBool | StrictInt | StrictFloat | str] = Field(
         None,
         example={
             "azimuth": 321.4441223144531,
@@ -365,8 +324,7 @@ class BrainPredictionResult(LHBaseModel):
             "pressure_trend_1h_falling": 1,
         },
     )
-    prediction: StrictBool | StrictInt | StrictFloat = Field(
-        None, example=False)
+    prediction: StrictBool | StrictInt | StrictFloat = Field(None, example=False)
 
 
 class BrainDeleteResult(LHBaseModel):
@@ -374,3 +332,25 @@ class BrainDeleteResult(LHBaseModel):
     The result of a delete request."""
 
     name: str = Field(None, example="darkness")
+
+
+class DatasetConfiguration:
+    dependent_encoder: Optional[LabelEncoder] = None
+    imputer: SimpleImputer
+    data_size: Optional[int] = 0
+    features: Optional[List[str]] = None
+    columns: Optional[List[str]] = None
+
+    def __init__(self, brain_config: BrainConfiguration):
+        self.dependent_encoder = (
+            LabelEncoder() if brain_config.dependent_encode else None
+        )
+        self.imputer = SimpleImputer(missing_values=np.nan, strategy="mean")
+
+    @property
+    def is_dependent_encoder(self) -> bool:
+        return self.dependent_encoder is not None
+
+    @property
+    def has_columns(self) -> bool:
+        return self.columns is not None

@@ -1,9 +1,9 @@
 import logging
 
-from learninghouse.models.base import EnumModel
+from learninghouse.core.models import LHEnumModel
 
 
-class LoggingLevelEnum(EnumModel):
+class LoggingLevelEnum(LHEnumModel):
     DEBUG = "DEBUG", logging.DEBUG
     INFO = "INFO", logging.INFO
     WARNING = "WARNING", logging.WARNING

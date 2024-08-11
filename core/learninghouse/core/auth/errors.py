@@ -2,11 +2,11 @@ from typing import Dict
 
 from fastapi import status
 
-from learninghouse.api.errors import (
+from learninghouse.core.errors.models import (
+    LearningHouseErrorMessage,
     LearningHouseException,
     LearningHouseSecurityException,
 )
-from learninghouse.models import LearningHouseErrorMessage
 
 MIMETYPE_JSON = "application/json"
 

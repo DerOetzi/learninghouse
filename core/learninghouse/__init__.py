@@ -10,7 +10,7 @@ from pydantic.version import VERSION as pydantic_version
 from sklearn import __version__ as skl_version
 from uvicorn import __version__ as uvicorn_version
 
-from learninghouse.models import LearningHouseVersions
+from learninghouse.core.models import LearningHouseVersions
 
 from ._version import get_versions
 

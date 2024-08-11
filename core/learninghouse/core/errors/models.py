@@ -1,14 +1,32 @@
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
 
-from fastapi import Request, status
+from typing import Any, Optional
+
+from fastapi import status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from learninghouse.core.logger import logger
-from learninghouse.models import (
-    LearningHouseErrorMessage,
-    LearningHouseValidationErrorMessage,
-)
+from learninghouse.core.models import LHBaseModel
+
+
+class LearningHouseErrorMessage(LHBaseModel):
+    error: str
+    description: str = ""
+
+
+class LearningHouseValidationErrorMessage(LearningHouseErrorMessage):
+    validations: list[dict[str, Any]]
+
+    @classmethod
+    def from_error_message(
+        cls, error_message: LearningHouseErrorMessage, validations: list[dict[str, Any]]
+    ) -> LearningHouseValidationErrorMessage:
+        return cls(
+            error=error_message.error,
+            description=error_message.description,
+            validations=validations,
+        )
+
 
 MIMETYPE_JSON = "application/json"
 
@@ -23,7 +41,7 @@ class LearningHouseException(Exception):
         status_code: Optional[int] = None,
         key: Optional[str] = None,
         description: Optional[str] = None,
-        headers: Optional[Dict[str, str]] = None,
+        headers: Optional[dict[str, str]] = None,
     ):
         super().__init__()
         self.http_status_code: int = status_code or self.STATUS_CODE
@@ -34,13 +52,13 @@ class LearningHouseException(Exception):
 
     def response(self) -> JSONResponse:
         return JSONResponse(
-            content=self.error.dict(),
+            content=self.error.model_dump(),
             status_code=self.http_status_code,
             headers=self.headers,
         )
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "An exception occured which is not handled by the service now. "
@@ -64,7 +82,7 @@ class LearningHouseSecurityException(LearningHouseException):
         super().__init__(self.STATUS_CODE, key, description or self.DESCRIPTION)
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "The request didn't pass security checks.",
@@ -93,7 +111,7 @@ class LearningHouseUnauthorizedException(LearningHouseException):
         )
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "The request didn't pass security checks.",
@@ -117,10 +135,10 @@ class LearningHouseValidationError(LearningHouseException):
         super().__init__(
             self.STATUS_CODE, self.VALIDATION_ERROR, str(error) or self.DESCRIPTION
         )
-        self.validations: List[Dict[str, Any]] = error.errors()
+        self.validations: list[dict[str, Any]] = error.errors()
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseValidationErrorMessage,
             "description": "The request didn't pass input validation",
@@ -147,22 +165,5 @@ class LearningHouseValidationError(LearningHouseException):
             self.error, self.validations
         )
         return JSONResponse(
-            content=validation_error.dict(), status_code=self.http_status_code
+            content=validation_error.model_dump(), status_code=self.http_status_code
         )
-
-
-async def validation_error_handler(
-    _: Request, exc: RequestValidationError
-) -> JSONResponse:
-    return LearningHouseValidationError(exc).response()
-
-
-async def learninghouse_exception_handler(_: Request, exc: LearningHouseException):
-    response = exc.response()
-
-    if isinstance(
-        exc, (LearningHouseSecurityException, LearningHouseUnauthorizedException)
-    ):
-        logger.warning(exc.error.description)
-
-    return response

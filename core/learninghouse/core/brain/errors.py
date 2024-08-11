@@ -1,13 +1,13 @@
-from typing import Dict
+from typing import Any
 
 from fastapi import status
 
 from learninghouse import versions
-from learninghouse.api.errors import LearningHouseException
-from learninghouse.models import (
+from learninghouse.core.errors.models import (
     LearningHouseErrorMessage,
-    LearningHouseVersions,
+    LearningHouseException,
 )
+from learninghouse.core.models import LearningHouseVersions
 
 MIMETYPE_JSON = "application/json"
 
@@ -17,14 +17,13 @@ class BrainNotTrained(LearningHouseException):
     NOT_TRAINED = "NOT_TRAINED"
     DESCRIPTION = "No trained brain with {name} found."
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         super().__init__(
-            self.STATUS_CODE, self.NOT_TRAINED, self.DESCRIPTION.format(
-                name=name)
+            self.STATUS_CODE, self.NOT_TRAINED, self.DESCRIPTION.format(name=name)
         )
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "No trained brain with this name found.",
@@ -50,7 +49,7 @@ class BrainNotActual(LearningHouseException):
         + "Please train the brain again."
     )
 
-    def __init__(self, name: str, brain_versions: LearningHouseVersions):
+    def __init__(self, name: str, brain_versions: LearningHouseVersions) -> None:
         super().__init__(
             self.STATUS_CODE,
             self.NOT_ACTUAL,
@@ -60,7 +59,7 @@ class BrainNotActual(LearningHouseException):
         )
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "If brain was not trained with actual versions "
@@ -81,13 +80,13 @@ class BrainNotEnoughData(LearningHouseException):
         + "But your new data point was saved."
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             self.STATUS_CODE, self.NOT_ENOUGH_TRAINING_DATA, self.DESCRIPTION
         )
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "Response if there are not enough data points.",
@@ -107,14 +106,13 @@ class BrainNoConfiguration(LearningHouseException):
     NO_CONFIGURATION = "NO_CONFIGURATION"
     DESCRIPTION = "No configuration for brain {name} found."
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         super().__init__(
-            self.STATUS_CODE, self.NO_CONFIGURATION, self.DESCRIPTION.format(
-                name=name)
+            self.STATUS_CODE, self.NO_CONFIGURATION, self.DESCRIPTION.format(name=name)
         )
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "No brain configuration found.",
@@ -133,11 +131,11 @@ class BrainBadRequest(LearningHouseException):
     STATUS_CODE = status.HTTP_400_BAD_REQUEST
     BAD_REQUEST = "BAD_REQUEST"
 
-    def __init__(self, description: str):
+    def __init__(self, description: str) -> None:
         super().__init__(self.STATUS_CODE, self.BAD_REQUEST, description)
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "Brain received a bad request.",
@@ -154,13 +152,13 @@ class BrainExists(LearningHouseException):
     EXISTS = "EXISTS"
     DESCRIPTION = "The existing brain {name} can not be recreated. Use PUT to update."
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         super().__init__(
             self.STATUS_CODE, self.EXISTS, self.DESCRIPTION.format(name=name)
         )
 
     @classmethod
-    def api_description(cls) -> Dict:
+    def api_description(cls) -> dict[str, Any]:
         return {
             "model": LearningHouseErrorMessage,
             "description": "An existing brain can not be recreated. Use PUT to update.",

@@ -2,8 +2,10 @@ from typing import Dict
 
 from fastapi import status
 
-from learninghouse.api.errors import LearningHouseException
-from learninghouse.models import LearningHouseErrorMessage
+from learninghouse.core.errors.models import (
+    LearningHouseErrorMessage,
+    LearningHouseException,
+)
 
 MIMETYPE_JSON = "application/json"
 

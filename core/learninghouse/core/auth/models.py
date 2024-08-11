@@ -4,14 +4,13 @@ from datetime import datetime
 from os import path
 from random import randint
 from secrets import token_hex
-from typing import Dict, List, Union
 
 from passlib.hash import sha512_crypt
 from pydantic import Field
 
-from learninghouse.api.errors.auth import APIKeyExists, NoAPIKey
+from learninghouse.core.auth.errors import APIKeyExists, NoAPIKey
+from learninghouse.core.models import LHBaseModel, LHEnumModel
 from learninghouse.core.settings import service_settings
-from learninghouse.models.base import EnumModel, LHBaseModel
 
 settings = service_settings()
 
@@ -58,11 +57,11 @@ class TokenPayload(LHBaseModel):
         return self.sub == subject
 
 
-class APIKeyRole(EnumModel):
+class APIKeyRole(LHEnumModel):
     USER = "user"
     TRAINER = "trainer"
 
-    def __init__(self, role: str):
+    def __init__(self, role: str) -> None:
         # pylint: disable=super-init-not-called
         self._role: str = role
 
@@ -71,12 +70,12 @@ class APIKeyRole(EnumModel):
         return self._role
 
 
-class UserRole(EnumModel):
+class UserRole(LHEnumModel):
     USER = "user"
     TRAINER = "trainer"
     ADMIN = "admin"
 
-    def __init__(self, role: str):
+    def __init__(self, role: str) -> None:
         # pylint: disable=super-init-not-called
         self._role: str = role
 
@@ -117,7 +116,7 @@ SECURITY_FILENAME = settings.brains_directory / "security.json"
 
 class SecurityDatabase(LHBaseModel):
     admin_password: str
-    api_keys: Dict[str, APIKey] = {}
+    api_keys: dict[str, APIKey] = {}
     salt: str = token_hex(8)
     rounds: int = randint(400000, 999999)
     initial_password: bool = True
@@ -133,7 +132,7 @@ class SecurityDatabase(LHBaseModel):
 
         return database
 
-    def write(self):
+    def write(self) -> None:
         self.write_to_file(SECURITY_FILENAME, 4)
 
     def authenticate_password(self, password: str) -> bool:
@@ -163,10 +162,10 @@ class SecurityDatabase(LHBaseModel):
 
         return description
 
-    def list_api_keys(self) -> List[APIKeyInfo]:
+    def list_api_keys(self) -> list[APIKeyInfo]:
         return [APIKeyInfo.from_api_key(x) for x in self.api_keys.values()]
 
-    def find_apikey_by_key(self, key: str) -> Union[APIKeyInfo, None]:
+    def find_apikey_by_key(self, key: str) -> APIKeyInfo | None:
         api_key_info = None
         hashed_key = sha512_crypt.hash(key, salt=self.salt, rounds=self.rounds)
 
@@ -177,7 +176,7 @@ class SecurityDatabase(LHBaseModel):
 
     def find_apikey_by_description(
         self, description: str, full_api_key: bool = False
-    ) -> Union[APIKeyInfo, APIKey, None]:
+    ) -> APIKeyInfo | APIKey:
         api_key_info = None
 
         for api_key in self.api_keys.values():

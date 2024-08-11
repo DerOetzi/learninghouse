@@ -1,29 +1,30 @@
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
-from typing import Dict, List, Tuple, Union
 
-from fastapi import Security
+import jwt
+from fastapi import APIRouter, Depends, Path, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.security.api_key import APIKeyHeader, APIKeyQuery
-import jwt
 
-from learninghouse.api.errors import (
-    LearningHouseSecurityException,
-    LearningHouseUnauthorizedException,
-)
-from learninghouse.api.errors.auth import InvalidPassword
-from learninghouse.core.logger import logger
-from learninghouse.core.settings import service_settings
-from learninghouse.models.auth import (
+from learninghouse.core.auth.errors import InvalidPassword
+from learninghouse.core.auth.models import (
     APIKey,
     APIKeyInfo,
     APIKeyRequest,
     APIKeyRole,
+    LoginRequest,
+    PasswordRequest,
     SecurityDatabase,
     Token,
     TokenPayload,
     UserRole,
 )
+from learninghouse.core.errors.models import (
+    LearningHouseSecurityException,
+    LearningHouseUnauthorizedException,
+)
+from learninghouse.core.logger import logger
+from learninghouse.core.settings import service_settings
 
 settings = service_settings()
 
@@ -44,7 +45,7 @@ See https://github.com/LearningHouseService/learninghouse-monorepo/tree/main/lea
 class AuthServiceInternal:
     def __init__(self):
         self.database = SecurityDatabase.load_or_write_default()
-        self.refresh_tokens: Dict[str, datetime] = {}
+        self.refresh_tokens: dict[str, datetime] = {}
 
     @property
     def is_initial_admin_password(self) -> bool:
@@ -73,7 +74,7 @@ class AuthServiceInternal:
 
         return token
 
-    def revoke_refresh_token(self, refresh_token_jti: Union[str, None]) -> bool:
+    def revoke_refresh_token(self, refresh_token_jti: str | None) -> bool:
         self.cleanup_refresh_tokens()
 
         if refresh_token_jti:
@@ -105,14 +106,14 @@ class AuthServiceInternal:
         access_expire = issuetime + timedelta(minutes=1)
         access_payload = TokenPayload.create("admin", access_expire, issuetime)
         access_token = jwt.encode(
-            access_payload.model_dump(), settings.jwt_secret, algorithm="HS256")
+            access_payload.model_dump(), settings.jwt_secret, algorithm="HS256"
+        )
 
-        refresh_expire = issuetime + \
-            timedelta(minutes=settings.jwt_expire_minutes)
-        refresh_payload = TokenPayload.create(
-            "refresh", refresh_expire, issuetime)
+        refresh_expire = issuetime + timedelta(minutes=settings.jwt_expire_minutes)
+        refresh_payload = TokenPayload.create("refresh", refresh_expire, issuetime)
         refresh_token = jwt.encode(
-            refresh_payload.model_dump(), settings.jwt_secret, algorithm="HS256")
+            refresh_payload.model_dump(), settings.jwt_secret, algorithm="HS256"
+        )
 
         self.refresh_tokens[refresh_payload.jti] = refresh_expire
 
@@ -130,7 +131,7 @@ class AuthServiceInternal:
 
         return True
 
-    def list_api_keys(self) -> List[APIKeyInfo]:
+    def list_api_keys(self) -> list[APIKeyInfo]:
         return self.database.list_api_keys()
 
     def create_apikey(self, request: APIKeyRequest) -> APIKey:
@@ -164,9 +165,8 @@ class AuthServiceInternal:
 
     async def get_refresh(
         self, credentials: HTTPAuthorizationCredentials = Security(jwt_bearer)
-    ) -> Union[str, None]:
-        is_valid, jti = self.validate_credentials(
-            credentials, False, "refresh")
+    ) -> str | None:
+        is_valid, jti = self.validate_credentials(credentials, False, "refresh")
 
         return jti if is_valid else None
 
@@ -195,7 +195,7 @@ class AuthServiceInternal:
 
     def is_admin_user_or_trainer(
         self, credentials: HTTPAuthorizationCredentials, query: str, header: str
-    ) -> Union[UserRole, None]:
+    ) -> UserRole | None:
         role = None
 
         is_valid, _ = self.validate_credentials(credentials, False, "admin")
@@ -216,10 +216,10 @@ class AuthServiceInternal:
 
     def validate_credentials(
         self,
-        credentials: Union[HTTPAuthorizationCredentials, None],
+        credentials: HTTPAuthorizationCredentials | None,
         auto_error: bool,
         subject: str,
-    ) -> Tuple[bool, Union[str, None]]:
+    ) -> tuple[bool, str | None]:
         is_valid = True
         jti = None
 
@@ -239,8 +239,7 @@ class AuthServiceInternal:
 
         else:
             is_valid = False
-            self.raise_error_conditionally(
-                "Invalid authorization code.", auto_error)
+            self.raise_error_conditionally("Invalid authorization code.", auto_error)
 
         return is_valid, jti
 
@@ -249,9 +248,7 @@ class AuthServiceInternal:
         if auto_error:
             raise LearningHouseSecurityException(description)
 
-    def verify_jwt(
-        self, access_token: str, subject: str
-    ) -> Tuple[bool, Union[str, None]]:
+    def verify_jwt(self, access_token: str, subject: str) -> tuple[bool, str | None]:
         verified = False
         jti = None
 
@@ -264,7 +261,7 @@ class AuthServiceInternal:
                     settings.jwt_secret,
                     algorithms=["HS256"],
                     audience=payload_args["audience"],
-                    issuer=payload_args["issuer"]
+                    issuer=payload_args["issuer"],
                 )
             )
 
@@ -272,10 +269,9 @@ class AuthServiceInternal:
                 raise jwt.InvalidTokenError("Invalid subject")
 
             if subject == "refresh":
-                verified = (
-                    payload.jti in self.refresh_tokens
-                    and self.refresh_tokens[payload.jti] > datetime.now(timezone.utc)
-                )
+                verified = payload.jti in self.refresh_tokens and self.refresh_tokens[
+                    payload.jti
+                ] > datetime.now(timezone.utc)
 
                 if not verified:
                     logger.error("No valid refresh token")
@@ -296,3 +292,75 @@ def auth_service_cached() -> AuthServiceInternal:
 
 
 authservice = auth_service_cached()
+
+auth_router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@auth_router.post(
+    "/token",
+    responses={
+        200: {"description": "Successfully retrieve token"},
+        InvalidPassword.STATUS_CODE: InvalidPassword.api_description(),
+    },
+)
+async def post_token(request: LoginRequest) -> Token:
+    return authservice.create_token(request.password)
+
+
+@auth_router.put("/token")
+async def put_token(
+    refresh_token_jti: str = Depends(authservice.protect_refresh),
+) -> Token:
+    return authservice.refresh_token(refresh_token_jti)
+
+
+@auth_router.delete("/token")
+async def delete_token(
+    refresh_token_jti: str | None = Depends(authservice.get_refresh),
+) -> bool:
+    return authservice.revoke_refresh_token(refresh_token_jti)
+
+
+router_protected = APIRouter(dependencies=[Depends(authservice.protect_admin)])
+
+
+@router_protected.delete("/tokens")
+async def delete_tokens() -> bool:
+    return authservice.revoke_all_refresh_tokens()
+
+
+@router_protected.put("/password")
+async def update_password(
+    request: PasswordRequest, _=Depends(authservice.protect_admin)
+) -> bool:
+    return authservice.update_password(request.old_password, request.new_password)
+
+
+if not authservice.is_initial_admin_password:
+
+    @router_protected.get("/apikeys")
+    async def list_api_keys() -> list[APIKeyInfo]:
+        return authservice.list_api_keys()
+
+    @router_protected.post("/apikey")
+    async def create_apikey(request: APIKeyRequest) -> APIKey:
+        return authservice.create_apikey(request)
+
+    @router_protected.delete("/apikey/{description}")
+    async def delete_apikey(
+        description: str = Path(
+            min_length=3,
+            max_length=15,
+            regex=r"^[A-Za-z]\w{1,13}[A-Za-z0-9]$",
+            example="app_as_user",
+        )
+    ) -> str:
+        return authservice.delete_apikey(description)
+
+
+auth_router.include_router(router_protected)
+
+
+@auth_router.get("/role")
+def get_role(user_role: UserRole = Depends(authservice.protect_user)) -> UserRole:
+    return user_role

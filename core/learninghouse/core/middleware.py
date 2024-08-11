@@ -1,14 +1,18 @@
 import time
 
+from fastapi import Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from learninghouse.api.errors import (
+from learninghouse.core.auth import INITIAL_PASSWORD_WARNING, auth_service_cached
+from learninghouse.core.errors.models import (
     LearningHouseException,
     LearningHouseUnauthorizedException,
 )
 from learninghouse.core.logger import logger
 from learninghouse.core.settings import service_settings
-from learninghouse.services.auth import INITIAL_PASSWORD_WARNING, authservice
+
+authservice = auth_service_cached()
 
 settings = service_settings()
 
@@ -37,7 +41,7 @@ class EnforceInitialPasswordChange(BaseHTTPMiddleware):
         if settings.docs_url:
             self.endpoints.append(settings.docs_url)
 
-    async def dispatch(self, request, call_next):
+    async def dispatch(self, request, call_next) -> JSONResponse | Response:
         endpoint = request.url.path
         if authservice.is_initial_admin_password and not (
             endpoint in self.endpoints
@@ -54,7 +58,7 @@ class EnforceInitialPasswordChange(BaseHTTPMiddleware):
 
 class CatchAllException(BaseHTTPMiddleware):
     # pylint: disable=too-few-public-methods
-    async def dispatch(self, request, call_next):
+    async def dispatch(self, request, call_next) -> Response | JSONResponse:
         try:
             return await call_next(request)
         except Exception as exc:  # pylint: disable=broad-except
@@ -65,7 +69,7 @@ class CatchAllException(BaseHTTPMiddleware):
 
 class CustomHeader(BaseHTTPMiddleware):
     # pylint: disable=too-few-public-methods
-    async def dispatch(self, request, call_next):
+    async def dispatch(self, request, call_next) -> Response:
         start_time = time.time()
         response = await call_next(request)
         process_time = time.time() - start_time

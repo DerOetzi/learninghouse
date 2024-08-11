@@ -1,12 +1,12 @@
 from os import environ, listdir, path
 from pathlib import Path
 from secrets import token_hex
-from typing import Any, Dict, Generator, Optional, Union
+from typing import Any, Generator, Optional
 
 from pydantic import BaseModel, DirectoryPath
 
 from learninghouse import versions
-from learninghouse.api.errors import (
+from learninghouse.core.errors.models import (
     LearningHouseException,
     LearningHouseValidationError,
 )
@@ -61,7 +61,7 @@ class ServiceSettings(BaseModel):
         return data
 
     @property
-    def fastapi_kwargs(self) -> Dict[str, Any]:
+    def fastapi_kwargs(self) -> dict[str, Any]:
         validation_error = LearningHouseValidationError
         return {
             "debug": self.debug,
@@ -78,7 +78,7 @@ class ServiceSettings(BaseModel):
         }
 
     @property
-    def uvicorn_kwargs(self) -> Dict[str, Any]:
+    def uvicorn_kwargs(self) -> dict[str, Any]:
         kwargs = {
             "host": self.host,
             "port": self.port,
@@ -108,7 +108,7 @@ class ServiceSettings(BaseModel):
         return f"{base_url}:{self.port}"
 
     @property
-    def documentation_url(self) -> Union[str, None]:
+    def documentation_url(self) -> str | None:
         documentation_url = None
 
         if self.docs_url is not None:
@@ -121,7 +121,7 @@ class ServiceSettings(BaseModel):
         return self.base_url_calculated + self.openapi_file
 
     @property
-    def jwt_payload_claims(self) -> Dict[str, str]:
+    def jwt_payload_claims(self) -> dict[str, str]:
         return {"audience": "LearningHouseAPI", "issuer": "LearningHouse Service"}
 
     def _parse_key_and_values(

@@ -2,26 +2,23 @@ from __future__ import annotations
 
 import json
 from os import path
-from typing import List
 
 from pydantic import Field
 
 from learninghouse.core.logger import logger
+from learninghouse.core.models import LHBaseModel, LHEnumModel, LHListModel
 from learninghouse.core.settings import service_settings
-from learninghouse.models.base import (
-    EnumModel,
-    LHBaseModel,
-    ListModel,
-)
+
+settings = service_settings()
 
 
-class SensorType(EnumModel):
+class SensorType(LHEnumModel):
     NUMERICAL = "numerical"
     CATEGORICAL = "categorical"
     CYCLICAL = "cyclical"
     TIME = "time"
 
-    def __init__(self, typed: str):
+    def __init__(self, typed: str) -> None:
         # pylint: disable=super-init-not-called
         self._typed: str = typed
 
@@ -41,8 +38,8 @@ class Sensor(SensorConfiguration):
     pass
 
 
-class Sensors(ListModel):
-    root: List[Sensor] = Field(
+class Sensors(LHListModel[Sensor]):
+    root: list[Sensor] = Field(
         None,
         example=[
             {"name": "azimuth", "typed": "numerical"},
@@ -58,7 +55,7 @@ class Sensors(ListModel):
 
     @classmethod
     def load_config(cls) -> Sensors:
-        filename = service_settings().brains_directory / "sensors.json"
+        filename = settings.brains_directory / "sensors.json"
         sensors = []
 
         if path.exists(filename):
@@ -70,11 +67,11 @@ class Sensors(ListModel):
         return Sensors(sensors)
 
     def write_config(self) -> None:
-        filename = service_settings().brains_directory / "sensors.json"
+        filename = settings.brains_directory / "sensors.json"
         self.write_to_file(filename, indent=4)
 
     @property
-    def numericals(self) -> List[str]:
+    def numericals(self) -> list[str]:
         return list(
             map(
                 lambda x: x.name,
@@ -83,7 +80,7 @@ class Sensors(ListModel):
         )
 
     @property
-    def categoricals(self) -> List[str]:
+    def categoricals(self) -> list[str]:
         return list(
             map(
                 lambda x: x.name,

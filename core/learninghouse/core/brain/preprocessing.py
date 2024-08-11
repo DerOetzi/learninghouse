@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from learninghouse.models.sensor import Sensors
+from learninghouse.core.sensor.models import Sensors
 
 if TYPE_CHECKING:
-    from learninghouse.models.brain import Brain
+    from learninghouse.core.brain.models import Brain
 
 
 class DatasetPreprocessing:
@@ -18,7 +18,7 @@ class DatasetPreprocessing:
     NUMERICAL_KEY = "numerical"
 
     @classmethod
-    def sensorsconfig(cls) -> Tuple[List[str], List[str]]:
+    def sensorsconfig(cls) -> tuple[list[str], list[str]]:
         sensors = Sensors.load_config()
         categoricals = sensors.categoricals
         numericals = sensors.numericals
@@ -32,7 +32,7 @@ class DatasetPreprocessing:
         return categoricals, numericals
 
     @staticmethod
-    def add_time_information(data: Dict[str, Any]) -> Dict[str, Any]:
+    def add_time_information(data: dict[str, Any]) -> dict[str, Any]:
         if "timestamp" not in data:
             data["timestamp"] = datetime.now().timestamp()
 
@@ -49,7 +49,7 @@ class DatasetPreprocessing:
     @classmethod
     def get_x_selected_and_numerical_columns(
         cls, brain: Brain, data: pd.DataFrame, only_features: bool
-    ) -> Tuple[pd.DataFrame, List[str]]:
+    ) -> tuple[pd.DataFrame, list[str]]:
         categoricals, numericals = cls.sensorsconfig()
 
         categoricals = cls.columns_intersection(categoricals, data)
@@ -84,7 +84,7 @@ class DatasetPreprocessing:
     @classmethod
     def prepare_training(
         cls, brain: Brain, data: pd.DataFrame, only_features: bool
-    ) -> Tuple[Brain, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[Brain, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         x_vector, numericals = cls.get_x_selected_and_numerical_columns(
             brain, data, only_features
         )
@@ -141,8 +141,8 @@ class DatasetPreprocessing:
 
     @staticmethod
     def transform_columns(
-        func: Callable, data: pd.DataFrame, columns: List[str]
-    ) -> pd.DataFrame():
+        func: Callable, data: pd.DataFrame, columns: list[str]
+    ) -> pd.DataFrame:
         data_temp = data.copy()
         data_temp[columns] = func(data[columns])
         return data_temp
@@ -155,15 +155,15 @@ class DatasetPreprocessing:
     @classmethod
     def columns_intersection(
         cls,
-        list_or_dataframe1: Union[pd.DataFrame, List[str]],
-        list_or_dataframe2: Union[pd.DataFrame, List[str]],
-    ) -> List[str]:
+        list_or_dataframe1: pd.DataFrame | list[str],
+        list_or_dataframe2: pd.DataFrame | list[str],
+    ) -> list[str]:
         set1 = cls.set_of_columns(list_or_dataframe1)
         set2 = cls.set_of_columns(list_or_dataframe2)
         return sorted(list(set.intersection(set1, set2)))
 
     @staticmethod
-    def set_of_columns(list_or_dataframe: Union[pd.DataFrame, List[str]]) -> Set[str]:
+    def set_of_columns(list_or_dataframe: pd.DataFrame | list[str]) -> set[str]:
         set_of_columns = None
         if isinstance(list_or_dataframe, pd.DataFrame):
             set_of_columns = set(list_or_dataframe.columns.values.tolist())
