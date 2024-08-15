@@ -16,6 +16,7 @@
         "--rcfile=${workspaceFolder}/core/.pylintrc"
     ],
     "pylint.cwd": "${workspaceFolder}/core",
+    "python.envFile": "${workspaceFolder}/.env",
     "git.alwaysSignOff": true,
     "python.analysis.typeCheckingMode": "off",
     "python.analysis.autoImportCompletions": true,
