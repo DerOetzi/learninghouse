@@ -33,8 +33,8 @@ class SensorType(EnumModel):
 class SensorConfiguration(LHBaseModel):
     name: str = Field(None, example="azimuth")
     typed: SensorType = Field(None, example=SensorType.NUMERICAL)
-    cycles: int = Field(0, examples=360)
-    calc_sun_position: bool = Field(False, examples=False)
+    cycles: int = Field(0, example=360)
+    calc_sun_position: bool = Field(False, example=False)
 
 
 class Sensor(SensorConfiguration):
