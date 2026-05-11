@@ -37,7 +37,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '24'
         cache: 'npm'
         cache-dependency-path: ui/package-lock.json
 
@@ -54,7 +54,7 @@ jobs:
       with:
         name: ui-artifacts-${{ env.REF_NAME }}
         path: |
-          ui/dist/learninghouse
+          ui/dist/learninghouse/browser/**
     
   build-core:
     runs-on: ubuntu-latest
