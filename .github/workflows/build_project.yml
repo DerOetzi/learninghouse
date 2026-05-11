@@ -182,7 +182,7 @@ jobs:
     - name: Extract metadata (tags, labels) for Docker (No Release)
       id: meta
       if: ${{github.event_name != 'release'}}
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v6
       with:
         images: |
           ${{ env.REGISTRY_GITHUB }}/${{ env.IMAGE_NAME }}
@@ -190,7 +190,7 @@ jobs:
     - name: Extract metadata (tags, labels) for Docker (Release)
       id: meta_release
       if: ${{github.event_name == 'release'}}
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v6
       with:
         images: |
           ${{ env.IMAGE_NAME }}
